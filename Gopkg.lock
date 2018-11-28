@@ -10,6 +10,25 @@
   version = "v1.5.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:7afff364b8e5e9f1085fe77ae5630b8e0f7482338a50535881aa0b433e48fb0b"
+  name = "github.com/alicebob/gopher-json"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "5a6b3ba71ee69b77cf64febf8b5a7526ca5eaef0"
+
+[[projects]]
+  digest = "1:b7cb0201d452c4a7079dc6e8673693c1153b115e906d50d85600c962fc6085a8"
+  name = "github.com/alicebob/miniredis"
+  packages = [
+    ".",
+    "server",
+  ]
+  pruneopts = "UT"
+  revision = "3657542c8629876a1fa83e0b30a0246a67ffa652"
+  version = "v2.4.5"
+
+[[projects]]
   digest = "1:66b3310cf22cdc96c35ef84ede4f7b9b370971c4025f394c89a2638729653b11"
   name = "github.com/andybalholm/cascadia"
   packages = ["."]
@@ -79,6 +98,17 @@
   version = "v1.2.0"
 
 [[projects]]
+  digest = "1:38ec74012390146c45af1f92d46e5382b50531247929ff3a685d2b2be65155ac"
+  name = "github.com/gomodule/redigo"
+  packages = [
+    "internal",
+    "redis",
+  ]
+  pruneopts = "UT"
+  revision = "9c11da706d9b7902c6da69c592f75637793fe121"
+  version = "v2.0.0"
+
+[[projects]]
   digest = "1:236d7e1bdb50d8f68559af37dbcf9d142d56b431c9b2176d41e2a009b664cda8"
   name = "github.com/google/uuid"
   packages = ["."]
@@ -109,6 +139,19 @@
   packages = ["."]
   pruneopts = "UT"
   revision = "97ee4a9ee6ea01ed0bbf0325dd789f74cac6cb94"
+
+[[projects]]
+  branch = "master"
+  digest = "1:8ae7ee611e7317a88b14b088e84e4cd31ac8368d3e95b30668ebd26c33db3275"
+  name = "github.com/yuin/gopher-lua"
+  packages = [
+    ".",
+    "ast",
+    "parse",
+    "pm",
+  ]
+  pruneopts = "UT"
+  revision = "a0dfe84f6227cda1c5f975bf3e35d55ae0d3df61"
 
 [[projects]]
   branch = "master"
@@ -169,6 +212,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/alicebob/miniredis",
     "github.com/gocolly/colly",
     "github.com/google/uuid",
   ]

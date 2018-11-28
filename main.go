@@ -39,6 +39,21 @@ func main() {
 		colly.AllowedDomains("get-offline.com", "www.get-offline.com"),
 	)
 
+	storage := createRedisStorage()
+	if storage != nil {
+		err := c.SetStorage(storage)
+
+		if err != nil {
+			panic(err)
+		}
+
+		if err := storage.Clear(); err != nil {
+			log.Fatal(err)
+		}
+
+		defer storage.Client.Close()
+	}
+
 	dispatcher := NewDispatcher(MaxWorker)
 	defer dispatcher.Stop()
 	dispatcher.Run()
