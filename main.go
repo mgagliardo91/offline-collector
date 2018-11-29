@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gocolly/colly"
@@ -21,6 +22,7 @@ const calendarURL = "https://www.get-offline.com/raleigh/calendar"
 
 var stopDate, _ = time.Parse(calendarFormat, "2018-11-27")
 var events map[time.Time][]OfflineEvent
+var failures uint64
 
 func canVisitNextDate(date time.Time) bool {
 	return !stopDate.Equal(date) || stopDate.After(date)
@@ -35,29 +37,9 @@ func createCalendarURL(dateString string) string {
 	return fmt.Sprintf("%s?date=%s", calendarURL, dateString)
 }
 
-func setupStorage(c *colly.Collector) {
-	storage := createRedisStorage()
-	if storage != nil {
-		err := c.SetStorage(storage)
-
-		if err != nil {
-			panic(err)
-		}
-
-		if err := storage.Clear(); err != nil {
-			log.Fatal(err)
-		}
-
-		defer storage.Client.Close()
-	}
-}
-
 func main() {
-	c := colly.NewCollector(
-		colly.AllowedDomains("get-offline.com", "www.get-offline.com"),
-	)
-
-	setupStorage(c)
+	startProxyService()
+	c := createCollector()
 
 	dispatcher := NewDispatcher(MaxWorker)
 	defer dispatcher.Stop()
@@ -102,6 +84,18 @@ func main() {
 	// Set error handler
 	c.OnError(func(r *colly.Response, err error) {
 		fmt.Println("Request URL:", r.Request.URL, "failed with response:", r, "\nError:", err)
+		atomic.AddUint64(&failures, 1)
+
+		if failureCount := atomic.LoadUint64(&failures); failureCount > 5 {
+			return
+		}
+
+		proxyUrl := r.Request.Headers.Get(ProxyURLKey)
+		if len(proxyUrl) > 0 {
+			proxyList.Remove(proxyUrl)
+		}
+
+		c.Visit(r.Request.URL.String())
 	})
 
 	// Start scraping
