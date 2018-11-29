@@ -16,9 +16,10 @@ type OfflineEvent struct {
 	URL     string    `json:"url"`
 }
 
+const calendarFormat = "2006-01-02"
 const calendarURL = "https://www.get-offline.com/raleigh/calendar"
 
-var stopDate, _ = time.Parse("2006-01-02", "2018-11-28")
+var stopDate, _ = time.Parse(calendarFormat, "2018-11-27")
 var events map[time.Time][]OfflineEvent
 
 func canVisitNextDate(date time.Time) bool {
@@ -27,18 +28,14 @@ func canVisitNextDate(date time.Time) bool {
 
 func nextDateURL(date time.Time) string {
 	nextRequestDate := date.AddDate(0, 0, 1)
-	return createCalendarURL(nextRequestDate.Format("2006-01-02"))
+	return createCalendarURL(nextRequestDate.Format(calendarFormat))
 }
 
 func createCalendarURL(dateString string) string {
 	return fmt.Sprintf("%s?date=%s", calendarURL, dateString)
 }
 
-func main() {
-	c := colly.NewCollector(
-		colly.AllowedDomains("get-offline.com", "www.get-offline.com"),
-	)
-
+func setupStorage(c *colly.Collector) {
 	storage := createRedisStorage()
 	if storage != nil {
 		err := c.SetStorage(storage)
@@ -53,6 +50,14 @@ func main() {
 
 		defer storage.Client.Close()
 	}
+}
+
+func main() {
+	c := colly.NewCollector(
+		colly.AllowedDomains("get-offline.com", "www.get-offline.com"),
+	)
+
+	setupStorage(c)
 
 	dispatcher := NewDispatcher(MaxWorker)
 	defer dispatcher.Stop()
@@ -76,7 +81,7 @@ func main() {
 			URL:     e.Request.AbsoluteURL(link),
 		}
 
-		DetailJobQueue <- DetailJob{Event: event}
+		JobQueue <- Job{Payload: event, TaskName: EventDetail}
 	})
 
 	c.OnRequest(func(r *colly.Request) {
@@ -85,7 +90,7 @@ func main() {
 
 	c.OnResponse(func(r *colly.Response) {
 		dateString := r.Request.URL.Query().Get("date")
-		date, _ := time.Parse("2006-01-02", dateString)
+		date, _ := time.Parse(calendarFormat, dateString)
 		r.Request.Ctx.Put("date", date)
 
 		if canVisitNextDate(date) {
