@@ -13,9 +13,7 @@ func collectDetail(job Job) {
 		return
 	}
 
-	c := colly.NewCollector(
-		colly.AllowedDomains("get-offline.com", "www.get-offline.com"),
-	)
+	c := createCollector()
 
 	c.OnHTML("", func(e *colly.HTMLElement) {
 

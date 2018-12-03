@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/gocolly/colly"
@@ -17,12 +17,35 @@ type OfflineEvent struct {
 	URL     string    `json:"url"`
 }
 
+type FailureMap struct {
+	failures map[string]uint64
+	mux      sync.Mutex
+}
+
+func (f *FailureMap) increment(val string) uint64 {
+	f.mux.Lock()
+	defer f.mux.Unlock()
+
+	v, ok := f.failures[val]
+
+	if !ok {
+		f.failures[val] = 0
+	} else {
+		f.failures[val] = v + 1
+	}
+
+	return f.failures[val]
+}
+
 const calendarFormat = "2006-01-02"
 const calendarURL = "https://www.get-offline.com/raleigh/calendar"
 
-var stopDate, _ = time.Parse(calendarFormat, "2018-11-27")
+var stopDate, _ = time.Parse(calendarFormat, "2018-12-03")
 var events map[time.Time][]OfflineEvent
-var failures uint64
+
+var failureMap = FailureMap{
+	failures: make(map[string]uint64),
+}
 
 func canVisitNextDate(date time.Time) bool {
 	return !stopDate.Equal(date) || stopDate.After(date)
@@ -39,6 +62,8 @@ func createCalendarURL(dateString string) string {
 
 func main() {
 	startProxyService()
+	defer stopProxyService()
+
 	c := createCollector()
 
 	dispatcher := NewDispatcher(MaxWorker)
@@ -84,20 +109,23 @@ func main() {
 	// Set error handler
 	c.OnError(func(r *colly.Response, err error) {
 		fmt.Println("Request URL:", r.Request.URL, "failed with response:", r, "\nError:", err)
-		atomic.AddUint64(&failures, 1)
 
-		if failureCount := atomic.LoadUint64(&failures); failureCount > 5 {
-			return
+		proxyURL := r.Request.Headers.Get(ProxyURLKey)
+		if len(proxyURL) > 0 {
+			failures := failureMap.increment(proxyURL)
+
+			if failures > 2 {
+				proxyList.Remove(proxyURL)
+			}
+		} else {
+			time.Sleep(2 * time.Second)
 		}
 
-		proxyUrl := r.Request.Headers.Get(ProxyURLKey)
-		if len(proxyUrl) > 0 {
-			proxyList.Remove(proxyUrl)
-		}
-
+		// try again
 		c.Visit(r.Request.URL.String())
 	})
 
 	// Start scraping
-	c.Visit(createCalendarURL("2018-11-27"))
+	c.Visit(createCalendarURL("2018-12-03"))
+	c.Wait()
 }
