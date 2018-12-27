@@ -4,12 +4,13 @@ import (
 	"fmt"
 
 	"github.com/gocolly/redisstorage"
+	"github.com/mgagliardo91/go-utils"
 )
 
 var (
-	ADDR     = getEnvString("REDIS_ADDR", "")
-	PORT     = getEnvString("REDIS_PORT", "")
-	PASSWORD = getEnvString("REDIS_PASSWORD", "")
+	ADDR     = utils.GetEnvString("REDIS_ADDR", "")
+	PORT     = utils.GetEnvString("REDIS_PORT", "")
+	PASSWORD = utils.GetEnvString("REDIS_PASSWORD", "")
 )
 
 func createRedisStorage() *redisstorage.Storage {

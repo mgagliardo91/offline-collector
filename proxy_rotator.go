@@ -11,43 +11,46 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mgagliardo91/offline/proxy"
+	utils "github.com/mgagliardo91/go-utils"
 )
 
-type ProxyRequester func(requestCount int) ProxyListResponse
+type ProxyRequester func(requestCount int) []string
+
+type ProxyEntry struct {
+	url           *url.URL
+	lastValidated time.Time
+}
 
 type ProxyList struct {
-	ProxyURLs  []*url.URL `json:"proxyUrls"`
+	proxyURLs  []ProxyEntry
 	mux        sync.RWMutex
 	requestMux sync.Mutex
 }
-
-type ProxyListResponse []string
 
 const (
 	ProxyURLKey string = "PROXY_URL"
 )
 
 var (
-	maxProxyUrls         = getEnvInt("MAX_PROXY_URLS", 2)
-	proxyScanMin         = getEnvInt("PROXY_VALIDATOR_SCAN_MIN", 1)
+	maxProxyUrls         = utils.GetEnvInt("MAX_PROXY_URLS", 2)
+	proxyScanMin         = utils.GetEnvInt("PROXY_VALIDATOR_SCAN_MIN", 1)
 	proxyList            ProxyList
 	proxyRequest         chan bool
 	proxyStop            chan chan ChannelStop
 	proxyValidatorStop   chan chan ChannelStop
 	proxyValidatorTicker *time.Timer
+	proxyRequesterFunc   ProxyRequester
 )
 
-func startProxyService() {
+func startProxyService(proxyRequester ProxyRequester) {
+	proxyRequesterFunc = proxyRequester
 	proxyRequest = make(chan bool)
 	proxyStop = make(chan chan ChannelStop)
 	proxyList = ProxyList{
-		ProxyURLs: make([]*url.URL, 0),
+		proxyURLs: make([]ProxyEntry, 0),
 	}
 
-	if jsonBlob, err := ioutil.ReadFile("proxyList.json"); err == nil {
-		json.Unmarshal(jsonBlob, &proxyList)
-	}
+	proxyList.Load()
 
 	go func() {
 		log.Println("[ProxyService]: Starting")
@@ -71,7 +74,11 @@ func startProxyService() {
 	}()
 
 	// initialize
-	checkProxyCount()
+	if proxyList.Len() < maxProxyUrls {
+		checkProxyCount()
+	} else {
+		validateProxies()
+	}
 
 	for {
 		if proxyList.Len() >= maxProxyUrls {
@@ -110,31 +117,40 @@ func startProxyValidator() {
 			}
 		}
 	}()
-
-	validateProxies()
 }
 
 func validateProxies() {
 	needsCheck := false
-	proxyValidatorTicker.Stop()
+
+	if proxyValidatorTicker != nil {
+		proxyValidatorTicker.Stop()
+	}
 
 	proxyList.mux.RLock()
-	urlsToValidate := make([]*url.URL, len(proxyList.ProxyURLs))
-	copy(urlsToValidate[:], proxyList.ProxyURLs)
+	entriesToValidate := make([]*ProxyEntry, 0)
+	for i := range proxyList.proxyURLs {
+		entry := &proxyList.proxyURLs[i]
+		if entry.lastValidated.IsZero() || time.Since(entry.lastValidated) > time.Duration(15*time.Second) {
+			entriesToValidate = append(entriesToValidate, entry)
+		}
+	}
 	proxyList.mux.RUnlock()
 
-	for _, url := range urlsToValidate {
+	for _, urlEntry := range entriesToValidate {
 		var timeout = time.Duration(15 * time.Second)
 		client := &http.Client{
-			Transport: &http.Transport{Proxy: http.ProxyURL(url)},
+			Transport: &http.Transport{Proxy: http.ProxyURL(urlEntry.url)},
 			Timeout:   timeout}
-		_, err := client.Get("http://free.timeanddate.com/ts.php?t=1543866700891")
+		req, _ := http.NewRequest("GET", "http://free.timeanddate.com/ts.php", nil)
+		req.Close = true
 
+		_, err := client.Do(req)
 		if err != nil {
-			proxyList.Remove(url)
+			proxyList.Remove(urlEntry.url)
 			needsCheck = true
 		} else {
-			log.Printf("Url validated: %s\n", url.String())
+			log.Printf("Url validated: %s\n", urlEntry.url.String())
+			urlEntry.lastValidated = time.Now()
 		}
 	}
 
@@ -142,7 +158,9 @@ func validateProxies() {
 		checkProxyCount()
 	}
 
-	proxyValidatorTicker.Reset(time.Duration(proxyScanMin) * time.Minute)
+	if proxyValidatorTicker != nil {
+		proxyValidatorTicker.Reset(time.Duration(proxyScanMin) * time.Minute)
+	}
 }
 
 func checkProxyCount() {
@@ -164,7 +182,7 @@ func requestNewProxies() {
 		return
 	}
 
-	proxyListResponse := proxy.RequestGetProxy(count)
+	proxyListResponse := proxyRequesterFunc(count)
 
 	for _, result := range proxyListResponse {
 		proxyList.Add(result)
@@ -177,38 +195,46 @@ func (p *ProxyList) Len() int {
 	p.mux.RLock()
 	defer p.mux.RUnlock()
 
-	return len(p.ProxyURLs)
+	return len(p.proxyURLs)
 }
 
 func (p *ProxyList) GetRandom() (*url.URL, error) {
 	p.mux.RLock()
 	defer p.mux.RUnlock()
 
-	l := len(p.ProxyURLs)
+	l := len(p.proxyURLs)
 
 	if l <= 0 {
 		return nil, errors.New("No proxy urls available")
 	} else if l == 1 {
-		return p.ProxyURLs[0], nil
+		return p.proxyURLs[0].url, nil
 	}
 
 	i := rand.Intn(l - 1)
 
-	return p.ProxyURLs[i], nil
+	return p.proxyURLs[i].url, nil
 }
 
 func (p *ProxyList) Add(urlString string) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
+
+	p.add(urlString)
+	p.Save()
+}
+
+func (p *ProxyList) add(urlString string) {
 	urlItem, err := url.Parse(urlString)
 	if err != nil {
 		log.Panicf("Found unparseable proxy host %s", urlString)
 		return
 	}
 
-	p.mux.Lock()
-	defer p.mux.Unlock()
+	proxyEntry := ProxyEntry{
+		url: urlItem,
+	}
 
-	p.ProxyURLs = append(p.ProxyURLs, urlItem)
-	p.Save()
+	p.proxyURLs = append(p.proxyURLs, proxyEntry)
 }
 
 func (p *ProxyList) Remove(urlEntry interface{}) {
@@ -227,13 +253,13 @@ func (p *ProxyList) Remove(urlEntry interface{}) {
 		p.mux.Lock()
 
 		j := 0
-		for _, n := range p.ProxyURLs {
-			if n.String() != urlToRemove.String() {
-				p.ProxyURLs[j] = n
+		for _, n := range p.proxyURLs {
+			if n.url.String() != urlToRemove.String() {
+				p.proxyURLs[j] = n
 				j++
 			}
 		}
-		p.ProxyURLs = p.ProxyURLs[:j]
+		p.proxyURLs = p.proxyURLs[:j]
 		p.Save()
 
 		p.mux.Unlock()
@@ -241,7 +267,27 @@ func (p *ProxyList) Remove(urlEntry interface{}) {
 	}
 }
 
+func (p *ProxyList) Load() {
+	urls := make([]string, 0)
+
+	if jsonBlob, err := ioutil.ReadFile("proxyList.json"); err == nil {
+		json.Unmarshal(jsonBlob, &urls)
+	}
+
+	for _, urlString := range urls {
+		p.add(urlString)
+	}
+
+	p.Save()
+}
+
 func (p *ProxyList) Save() {
-	proxyJSON, _ := json.Marshal(p)
-	ioutil.WriteFile("proxyList.json", proxyJSON, 0644)
+	urls := make([]string, 0)
+
+	for _, entry := range p.proxyURLs {
+		urls = append(urls, entry.url.String())
+	}
+
+	urlsJSON, _ := json.Marshal(urls)
+	ioutil.WriteFile("proxyList.json", urlsJSON, 0644)
 }

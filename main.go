@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/gocolly/colly"
+	"github.com/mgagliardo91/blacksmith"
+	"github.com/mgagliardo91/go-utils"
+	"github.com/mgagliardo91/offline-collector/proxy"
 )
 
 type OfflineEvent struct {
@@ -37,10 +40,18 @@ func (f *FailureMap) increment(val string) uint64 {
 	return f.failures[val]
 }
 
+const (
+	EventDetail blacksmith.TaskName = iota
+)
+
 const calendarFormat = "2006-01-02"
 const calendarURL = "https://www.get-offline.com/raleigh/calendar"
 
-var stopDate, _ = time.Parse(calendarFormat, "2018-12-03")
+var (
+	MaxWorker = utils.GetEnvInt("MAX_WORKERS", 10)
+)
+
+var stopDate, _ = time.Parse(calendarFormat, "2018-12-27")
 var events map[time.Time][]OfflineEvent
 
 var failureMap = FailureMap{
@@ -61,14 +72,13 @@ func createCalendarURL(dateString string) string {
 }
 
 func main() {
-	startProxyService()
+	startProxyService(proxy.RequestGetProxy)
 	defer stopProxyService()
 
 	c := createCollector()
 
-	dispatcher := NewDispatcher(MaxWorker)
-	defer dispatcher.Stop()
-	dispatcher.Run()
+	blacksmith := blacksmith.New(MaxWorker)
+	blacksmith.SetHandler(EventDetail, collectDetail).Run()
 
 	c.OnHTML(".experience-thumb--calendar > a[href]", func(e *colly.HTMLElement) {
 		var date time.Time
@@ -88,7 +98,7 @@ func main() {
 			URL:     e.Request.AbsoluteURL(link),
 		}
 
-		JobQueue <- Job{Payload: event, TaskName: EventDetail}
+		blacksmith.QueueTask(EventDetail, event)
 	})
 
 	c.OnRequest(func(r *colly.Request) {
@@ -126,6 +136,9 @@ func main() {
 	})
 
 	// Start scraping
-	c.Visit(createCalendarURL("2018-12-03"))
+	c.Visit(createCalendarURL("2018-12-27"))
 	c.Wait()
+
+	blacksmith.Stop()
+	DumpCollections()
 }
