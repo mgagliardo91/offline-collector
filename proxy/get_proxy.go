@@ -3,8 +3,9 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
+
+	"github.com/mgagliardo91/go-utils"
 )
 
 type GetProxyResponseItem struct {
@@ -13,11 +14,11 @@ type GetProxyResponseItem struct {
 	Port     int    `json:"port"`
 }
 
-func RequestGetProxy(_ int) []string {
+func RequestGetProxy(_ int, logger *utils.LogWrapper) []string {
 	resp, err := http.Get("https://api.getproxylist.com/proxy?allowsHttps=1&country[]=US")
 
 	if err != nil {
-		log.Panicf("Unable to complete request to obtain proxy. Err = %+v\n", err.Error())
+		logger.Errorf("Unable to complete request to obtain proxy. Err = %+v\n", err.Error())
 		return nil
 	}
 
@@ -25,7 +26,7 @@ func RequestGetProxy(_ int) []string {
 	err = json.NewDecoder(resp.Body).Decode(&responseItem)
 
 	if err != nil {
-		log.Panicf("Unable to parse proxy request. Err = %+v\n", err.Error())
+		logger.Errorf("Unable to parse proxy request. Err = %+v\n", err.Error())
 		return nil
 	}
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -14,7 +13,7 @@ import (
 	utils "github.com/mgagliardo91/go-utils"
 )
 
-type ProxyRequester func(requestCount int) []string
+type ProxyRequester func(requestCount int, logger *utils.LogWrapper) []string
 
 type ProxyEntry struct {
 	url           *url.URL
@@ -36,8 +35,8 @@ var (
 	proxyScanMin         = utils.GetEnvInt("PROXY_VALIDATOR_SCAN_MIN", 1)
 	proxyList            ProxyList
 	proxyRequest         chan bool
-	proxyStop            chan chan ChannelStop
-	proxyValidatorStop   chan chan ChannelStop
+	proxyStop            utils.StopChannel
+	proxyValidatorStop   utils.StopChannel
 	proxyValidatorTicker *time.Timer
 	proxyRequesterFunc   ProxyRequester
 )
@@ -45,7 +44,7 @@ var (
 func startProxyService(proxyRequester ProxyRequester) {
 	proxyRequesterFunc = proxyRequester
 	proxyRequest = make(chan bool)
-	proxyStop = make(chan chan ChannelStop)
+	proxyStop = utils.NewStopChannel()
 	proxyList = ProxyList{
 		proxyURLs: make([]ProxyEntry, 0),
 	}
@@ -53,7 +52,7 @@ func startProxyService(proxyRequester ProxyRequester) {
 	proxyList.Load()
 
 	go func() {
-		log.Println("[ProxyService]: Starting")
+		GetLogger().Infoln("[ProxyService]: Starting")
 		for {
 			select {
 			case <-proxyRequest:
@@ -63,10 +62,10 @@ func startProxyService(proxyRequester ProxyRequester) {
 						checkProxyCount()
 					}
 				}
-			case stop := <-proxyStop:
+			case <-proxyStop.OnRequest:
 				{
-					log.Println("[ProxyService]: Exiting")
-					close(stop)
+					GetLogger().Infoln("[ProxyService]: Exiting")
+					proxyStop.Stop()
 					return
 				}
 			}
@@ -85,7 +84,7 @@ func startProxyService(proxyRequester ProxyRequester) {
 			break
 		}
 
-		log.Println("Waiting for full proxy list to start...")
+		GetLogger().Infoln("Waiting for full proxy list to start...")
 		time.Sleep(2 * time.Second)
 	}
 
@@ -94,25 +93,25 @@ func startProxyService(proxyRequester ProxyRequester) {
 
 func stopProxyService() {
 	proxyValidatorTicker.Stop()
-	stopChannel(proxyValidatorStop)
-	stopChannel(proxyStop)
+	proxyValidatorStop.RequestStop()
+	proxyStop.RequestStop()
 }
 
 func startProxyValidator() {
 	proxyValidatorTicker = time.NewTimer(time.Duration(proxyScanMin) * time.Minute)
-	proxyValidatorStop = make(chan chan ChannelStop)
+	proxyValidatorStop = utils.NewStopChannel()
 
 	go func() {
-		log.Println("[ProxyValidatorService]: Starting")
+		GetLogger().Infoln("[ProxyValidatorService]: Starting")
 		for {
 			select {
 			case <-proxyValidatorTicker.C:
 				validateProxies()
-				log.Println("[ProxyValidatorService]: Resetting timer")
-			case stop := <-proxyValidatorStop:
+				GetLogger().Infoln("[ProxyValidatorService]: Resetting timer")
+			case <-proxyValidatorStop.OnRequest:
 				proxyValidatorTicker.Stop()
-				close(stop)
-				log.Println("[ProxyValidatorService]: Exiting")
+				GetLogger().Infoln("[ProxyValidatorService]: Exiting")
+				proxyValidatorStop.Stop()
 				return
 			}
 		}
@@ -149,7 +148,7 @@ func validateProxies() {
 			proxyList.Remove(urlEntry.url)
 			needsCheck = true
 		} else {
-			log.Printf("Url validated: %s\n", urlEntry.url.String())
+			GetLogger().Infof("Url validated: %s\n", urlEntry.url.String())
 			urlEntry.lastValidated = time.Now()
 		}
 	}
@@ -173,7 +172,7 @@ func requestNewProxies() {
 	proxyList.requestMux.Lock()
 	defer proxyList.requestMux.Unlock()
 
-	log.Println("[ProxyService]: Obtaining new proxies")
+	GetLogger().Infoln("[ProxyService]: Obtaining new proxies")
 	count := maxProxyUrls - proxyList.Len()
 
 	if count > 20 {
@@ -182,7 +181,7 @@ func requestNewProxies() {
 		return
 	}
 
-	proxyListResponse := proxyRequesterFunc(count)
+	proxyListResponse := proxyRequesterFunc(count, GetLogger())
 
 	for _, result := range proxyListResponse {
 		proxyList.Add(result)
@@ -226,7 +225,7 @@ func (p *ProxyList) Add(urlString string) {
 func (p *ProxyList) add(urlString string) {
 	urlItem, err := url.Parse(urlString)
 	if err != nil {
-		log.Panicf("Found unparseable proxy host %s", urlString)
+		GetLogger().Errorf("Found unparseable proxy host %s", urlString)
 		return
 	}
 
@@ -249,7 +248,7 @@ func (p *ProxyList) Remove(urlEntry interface{}) {
 	}
 
 	if urlToRemove != nil {
-		log.Printf("[ProxyService]: Removing URL %s\n", urlToRemove.Path)
+		GetLogger().Infof("[ProxyService]: Removing URL %s\n", urlToRemove.Path)
 		p.mux.Lock()
 
 		j := 0

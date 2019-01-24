@@ -24,6 +24,7 @@
 #   go-tests = true
 #   unused-packages = true
 
+ignored = ["github.com/mgagliardo91/go-utils", "github.com/mgagliardo91/blacksmith", "github.com/mgagliardo91/offline-common"]
 
 [prune]
   go-tests = true

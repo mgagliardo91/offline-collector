@@ -14,4 +14,4 @@ vendor/
 .vscode/
 proxyList.json
 debug
-offline
+offline-collector

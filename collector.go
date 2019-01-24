@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"net/url"
 
@@ -33,7 +32,7 @@ func setupStorage(c *colly.Collector) {
 		}
 
 		if err := storage.Clear(); err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 
 		defer storage.Client.Close()

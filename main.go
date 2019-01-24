@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +12,7 @@ import (
 	"github.com/mgagliardo91/offline-collector/proxy"
 )
 
-type OfflineEvent struct {
+type OfflineEventRequest struct {
 	Date    time.Time `json:"date"`
 	Title   string    `json:"title"`
 	Details string    `json:"details"`
@@ -51,8 +50,8 @@ var (
 	MaxWorker = utils.GetEnvInt("MAX_WORKERS", 10)
 )
 
-var stopDate, _ = time.Parse(calendarFormat, "2018-12-27")
-var events map[time.Time][]OfflineEvent
+var stopDate, _ = time.Parse(calendarFormat, "2019-01-23")
+var events map[time.Time][]OfflineEventRequest
 
 var failureMap = FailureMap{
 	failures: make(map[string]uint64),
@@ -72,6 +71,7 @@ func createCalendarURL(dateString string) string {
 }
 
 func main() {
+	utils.SetLoggerLevel(blacksmith.LoggerName, "info")
 	startProxyService(proxy.RequestGetProxy)
 	defer stopProxyService()
 
@@ -91,7 +91,7 @@ func main() {
 		link := e.Attr("href")
 		el := e.DOM
 
-		event := OfflineEvent{
+		event := OfflineEventRequest{
 			Date:    date,
 			Title:   strings.TrimSpace(el.Find("div[class$=\"_title\"]").Text()),
 			Details: strings.TrimSpace(el.Find("div[class$=\"_details\"]").Text()),
@@ -102,7 +102,7 @@ func main() {
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		log.Println("visiting", r.URL.String())
+		GetLogger().Infoln("visiting", r.URL.String())
 	})
 
 	c.OnResponse(func(r *colly.Response) {
@@ -118,7 +118,7 @@ func main() {
 
 	// Set error handler
 	c.OnError(func(r *colly.Response, err error) {
-		fmt.Println("Request URL:", r.Request.URL, "failed with response:", r, "\nError:", err)
+		GetLogger().Infoln("Request URL:", r.Request.URL, "failed with response:", r, "\nError:", err)
 
 		proxyURL := r.Request.Headers.Get(ProxyURLKey)
 		if len(proxyURL) > 0 {
@@ -136,9 +136,18 @@ func main() {
 	})
 
 	// Start scraping
-	c.Visit(createCalendarURL("2018-12-27"))
+	c.Visit(createCalendarURL("2019-01-23"))
 	c.Wait()
 
 	blacksmith.Stop()
-	DumpCollections()
+}
+
+var logger *utils.LogWrapper
+
+func GetLogger() *utils.LogWrapper {
+	if logger == nil {
+		logger = utils.NewLogger("collector")
+	}
+
+	return logger
 }
