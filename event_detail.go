@@ -38,9 +38,15 @@ func collectDetail(task blacksmith.Task) {
 	})
 
 	c.OnHTML(".show__title", func(e *colly.HTMLElement) {
-		value := re.ReplaceAllLiteralString(strings.TrimSpace(e.Text), " ")
+		values := make([]string, 0)
+		e.DOM.Contents().Each(func(i int, s *goquery.Selection) {
+			if goquery.NodeName(s) == "#text" {
+				values = append(values, re.ReplaceAllLiteralString(strings.TrimSpace(s.Text()), " "))
+			}
+		})
+
 		offlineEvent.LockAndUpdate(func() {
-			offlineEvent.Title = value
+			offlineEvent.Title = strings.TrimSpace(strings.Join(values[:], " "))
 		})
 	})
 
@@ -142,9 +148,9 @@ func collectDetail(task blacksmith.Task) {
 	task.LogfUsing(GetLogger().Infof, "Finished visiting %s", eventRequest.URL)
 }
 
-type updateFunc func(event *common.OfflineEvent)
+type updateFunc func(event *common.RawOfflineEvent)
 
-func updateEvent(event *common.OfflineEvent, lock *sync.Mutex, update updateFunc) {
+func updateEvent(event *common.RawOfflineEvent, lock *sync.Mutex, update updateFunc) {
 	lock.Lock()
 	defer lock.Unlock()
 

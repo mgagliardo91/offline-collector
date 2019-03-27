@@ -1,7 +1,10 @@
 package main
 
 import (
+	"errors"
+	"flag"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +26,8 @@ type FailureMap struct {
 	failures map[string]uint64
 	mux      sync.Mutex
 }
+
+type SimpleDate time.Time
 
 func (f *FailureMap) increment(val string) uint64 {
 	f.mux.Lock()
@@ -50,15 +55,11 @@ var (
 	MaxWorker = utils.GetEnvInt("MAX_WORKERS", 10)
 )
 
-var stopDate, _ = time.Parse(calendarFormat, "2019-01-23")
+var stopDate, _ = time.Parse(calendarFormat, "2019-02-29")
 var events map[time.Time][]OfflineEventRequest
 
 var failureMap = FailureMap{
 	failures: make(map[string]uint64),
-}
-
-func canVisitNextDate(date time.Time) bool {
-	return !stopDate.Equal(date) || stopDate.After(date)
 }
 
 func nextDateURL(date time.Time) string {
@@ -70,7 +71,36 @@ func createCalendarURL(dateString string) string {
 	return fmt.Sprintf("%s?date=%s", calendarURL, dateString)
 }
 
+func (s *SimpleDate) String() string {
+	return time.Time(*s).Format(calendarFormat)
+}
+
+func (s *SimpleDate) Set(value string) error {
+	dateVal, err := time.Parse(calendarFormat, value)
+	if err != nil {
+		return errors.New("Unable to parse to date value. Format YYYY-MM-DD")
+	}
+
+	*s = SimpleDate(dateVal)
+	return nil
+}
+
 func main() {
+	var startDate, endDate SimpleDate
+	flag.Var(&startDate, "start", "Start date YYYY-MM-DD")
+	flag.Var(&endDate, "end", "End date YYYY-MM-DD")
+	flag.Parse()
+
+	if startDate == (SimpleDate{}) {
+		startDate.Set(time.Now().Format(calendarFormat))
+	}
+
+	if endDate == (SimpleDate{}) {
+		endDate.Set(time.Now().Format(calendarFormat))
+	}
+
+	log.Printf("Collecting offline events between %s and %s \n", startDate.String(), endDate.String())
+
 	utils.SetLoggerLevel(blacksmith.LoggerName, "info")
 	startProxyService(proxy.RequestGetProxy)
 	defer stopProxyService()
@@ -110,7 +140,7 @@ func main() {
 		date, _ := time.Parse(calendarFormat, dateString)
 		r.Request.Ctx.Put("date", date)
 
-		if canVisitNextDate(date) {
+		if !time.Time(endDate).Equal(date) || time.Time(endDate).After(date) {
 			nextURL := nextDateURL(date)
 			c.Visit(nextURL)
 		}
@@ -136,7 +166,7 @@ func main() {
 	})
 
 	// Start scraping
-	c.Visit(createCalendarURL("2019-01-23"))
+	c.Visit(createCalendarURL(startDate.String()))
 	c.Wait()
 
 	blacksmith.Stop()
