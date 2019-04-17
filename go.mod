@@ -17,10 +17,17 @@ require (
 	github.com/kennygrant/sanitize v1.2.4
 	github.com/mgagliardo91/blacksmith v0.0.0-20190416135034-f8d27cf0f538
 	github.com/mgagliardo91/go-utils v0.0.0-20190416134619-49bf1bd1eeb6
-	github.com/mgagliardo91/offline-common v0.0.0-20190416135145-9067d4efd066
+	github.com/mgagliardo91/offline-common v0.0.0-20190416203933-8694297da144
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca
 	github.com/temoto/robotstxt v0.0.0-20180810133444-97ee4a9ee6ea
 	golang.org/x/net v0.0.0-20190415214537-1da14a5a36f2
+	golang.org/x/sys v0.0.0-20190416152802-12500544f89f // indirect
 	golang.org/x/text v0.3.0
 	google.golang.org/appengine v1.5.0
+)
+
+replace (
+	github.com/mgagliardo91/blacksmith => ../blacksmith
+	github.com/mgagliardo91/go-utils => ../go-utils
+	github.com/mgagliardo91/offline-common => ../offline-common
 )

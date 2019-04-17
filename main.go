@@ -55,7 +55,6 @@ var (
 	MaxWorker = utils.GetEnvInt("MAX_WORKERS", 10)
 )
 
-var stopDate, _ = time.Parse(calendarFormat, "2019-02-29")
 var events map[time.Time][]OfflineEventRequest
 
 var failureMap = FailureMap{
@@ -96,7 +95,7 @@ func main() {
 	}
 
 	if endDate == (SimpleDate{}) {
-		endDate.Set(time.Now().Format(calendarFormat))
+		endDate.Set(startDate.String())
 	}
 
 	log.Printf("Collecting offline events between %s and %s \n", startDate.String(), endDate.String())
@@ -107,6 +106,7 @@ func main() {
 
 	c := createCollector()
 
+	var dateSet sync.Map
 	blacksmith := blacksmith.New(MaxWorker)
 	blacksmith.SetHandler(EventDetail, collectDetail).Run()
 
@@ -131,6 +131,24 @@ func main() {
 		blacksmith.QueueTask(EventDetail, event)
 	})
 
+	c.OnHTML(".calender-sliders__date", func(e *colly.HTMLElement) {
+		date := e.Attr("id")
+
+		if _, hasDate := dateSet.Load(date); !hasDate {
+			dateSet.Store(date, true)
+
+			dateVal, err := time.Parse(calendarFormat, date)
+			if err != nil {
+				GetLogger().Errorf("Unable to parse date ID as date: %s. %s", date, err)
+			}
+
+			if (time.Time(endDate).Equal(dateVal) || time.Time(endDate).After(dateVal)) && (time.Time(startDate).Before(dateVal)) {
+				nextURL := nextDateURL(dateVal)
+				c.Visit(nextURL)
+			}
+		}
+	})
+
 	c.OnRequest(func(r *colly.Request) {
 		GetLogger().Infoln("visiting", r.URL.String())
 	})
@@ -140,10 +158,7 @@ func main() {
 		date, _ := time.Parse(calendarFormat, dateString)
 		r.Request.Ctx.Put("date", date)
 
-		if !time.Time(endDate).Equal(date) || time.Time(endDate).After(date) {
-			nextURL := nextDateURL(date)
-			c.Visit(nextURL)
-		}
+		dateSet.Store(dateString, true)
 	})
 
 	// Set error handler
