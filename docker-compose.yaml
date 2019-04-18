@@ -12,5 +12,7 @@ services:
   offline-collector:
     build: .
     image: offline-collector
+    depends_on:
+      - offline-server
     environment:
       - OFFLINE_SERVER=offline-server
