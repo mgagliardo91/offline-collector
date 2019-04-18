@@ -11,7 +11,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly"
 	"github.com/mgagliardo91/blacksmith"
-	"github.com/mgagliardo91/offline-common"
+	common "github.com/mgagliardo91/offline-common"
 )
 
 var re = regexp.MustCompile(`(\s{2,}|[\r\n]+)`)
@@ -140,9 +140,9 @@ func collectDetail(task blacksmith.Task) {
 	c.Wait()
 
 	jsonValue, _ := json.Marshal(offlineEvent)
-	_, err := http.Post("http://localhost:3000/event", "application/json", bytes.NewBuffer(jsonValue))
+	_, err := http.Post("http://"+OfflineServer+":"+OfflinePort+"/event", "application/json", bytes.NewBuffer(jsonValue))
 	if err != nil {
-		GetLogger().Errorf("Error posting task to server: %v", err)
+		GetLogger().Errorf("Error posting task to server: %s", err)
 	}
 
 	task.LogfUsing(GetLogger().Infof, "Finished visiting %s", eventRequest.URL)

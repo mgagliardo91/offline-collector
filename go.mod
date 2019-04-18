@@ -25,9 +25,3 @@ require (
 	golang.org/x/text v0.3.0
 	google.golang.org/appengine v1.5.0
 )
-
-replace (
-	github.com/mgagliardo91/blacksmith => ../blacksmith
-	github.com/mgagliardo91/go-utils => ../go-utils
-	github.com/mgagliardo91/offline-common => ../offline-common
-)

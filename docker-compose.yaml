@@ -1,0 +1,16 @@
+version: '3'
+
+services:
+  offline-server:
+    build: ${DEVOPTICS_UI_DIR:-..}/offline-server
+    image: offline-server
+    environment:
+      - ELASTIC_SEARCH_URL=${ELASTIC_SEARCH_URL}
+    ports:
+      - 3000:3000
+
+  offline-collector:
+    build: .
+    image: offline-collector
+    environment:
+      - OFFLINE_SERVER=offline-server

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -52,7 +51,9 @@ const calendarFormat = "2006-01-02"
 const calendarURL = "https://www.get-offline.com/raleigh/calendar"
 
 var (
-	MaxWorker = utils.GetEnvInt("MAX_WORKERS", 10)
+	MaxWorker     = utils.GetEnvInt("MAX_WORKERS", 10)
+	OfflineServer = utils.GetEnvString("OFFLINE_SERVER", "http://0.0.0.0")
+	OfflinePort   = utils.GetEnvString("OFFLINE_PORT", "3000")
 )
 
 var events map[time.Time][]OfflineEventRequest
@@ -85,6 +86,13 @@ func (s *SimpleDate) Set(value string) error {
 }
 
 func main() {
+	if OfflineServer == "" || OfflinePort == "" {
+		GetLogger().Fatalf("Invalid offline server address.")
+		return
+	}
+
+	GetLogger().Infof("Using offline server at: %s:%s", OfflineServer, OfflinePort)
+
 	var startDate, endDate SimpleDate
 	flag.Var(&startDate, "start", "Start date YYYY-MM-DD")
 	flag.Var(&endDate, "end", "End date YYYY-MM-DD")
@@ -98,7 +106,7 @@ func main() {
 		endDate.Set(startDate.String())
 	}
 
-	log.Printf("Collecting offline events between %s and %s \n", startDate.String(), endDate.String())
+	GetLogger().Infof("Collecting offline events between %s and %s \n", startDate.String(), endDate.String())
 
 	utils.SetLoggerLevel(blacksmith.LoggerName, "info")
 	startProxyService(proxy.RequestGetProxy)

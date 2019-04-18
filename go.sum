@@ -55,6 +55,8 @@ github.com/mgagliardo91/offline-common v0.0.0-20190124211046-18b676ad7b98 h1:egM
 github.com/mgagliardo91/offline-common v0.0.0-20190124211046-18b676ad7b98/go.mod h1:teQxIbqcA6HTM8yKLsjxP0xeFgvV9taHPoMaIvuyZjY=
 github.com/mgagliardo91/offline-common v0.0.0-20190416135145-9067d4efd066 h1:9jsPae1vIFMmWsIVx+3SkY/cpgMh2WVh2nKIiejegqc=
 github.com/mgagliardo91/offline-common v0.0.0-20190416135145-9067d4efd066/go.mod h1:aBAZPz49agmBpOmL/WhP46I8JK8i2jopRniGP1fW4uM=
+github.com/mgagliardo91/offline-common v0.0.0-20190416203933-8694297da144 h1:LyhaR+ITFkQH5p7e8aBnqeRC+nn+t4yxvYF6H7jx6to=
+github.com/mgagliardo91/offline-common v0.0.0-20190416203933-8694297da144/go.mod h1:UMIrDWq5+OO7rWHQj5Efm36rgALyj6V1zkgWHro+N0o=
 github.com/mgutz/ansi v0.0.0-20170206155736-9520e82c474b/go.mod h1:01TrycV0kFyexm33Z7vhZRXopbI8J3TDReVlkTgMUxE=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca h1:NugYot0LIVPxTvN8n+Kvkn6TrbMyxQiuvKdEwFdR9vI=
